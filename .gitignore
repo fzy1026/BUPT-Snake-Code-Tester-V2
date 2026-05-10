@@ -1,0 +1,5 @@
+# Temporary work directories created by local runs and harnesses
+/work/
+/dist/work/
+/tests/work/
+/limit_work/
