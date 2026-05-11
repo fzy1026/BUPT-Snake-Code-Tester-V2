@@ -39,7 +39,7 @@ namespace SnakeOJTester
             List<TestCase> cases = new List<TestCase>();
             for (int i = 0; i < ScoringNs.Length; i++)
             {
-                cases.Add(CreateRandomOjLikeCase(20260506 + i * 97, ScoringNs[i], "璺戝垎鐢ㄤ緥-" + (i + 1).ToString("00") + "  N=" + ScoringNs[i], true));
+                cases.Add(CreateRandomOjLikeCase(20260506 + i * 97, ScoringNs[i], "跑分用例-" + (i + 1).ToString("00") + "  N=" + ScoringNs[i], true));
             }
             return cases;
         }

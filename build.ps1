@@ -4,6 +4,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $srcDir = Join-Path $root "src"
 $distDir = Join-Path $root "dist"
 $outExe = Join-Path $distDir "SnakeOJTester.exe"
+$manifest = Join-Path $root "app.manifest"
 
 $csc64 = Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $csc32 = Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319\csc.exe"
@@ -16,6 +17,7 @@ if (Test-Path $csc64) {
 }
 
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
 $distWorkDir = Join-Path $distDir "work"
 if (Test-Path $distWorkDir) {
     $resolvedDist = (Resolve-Path -LiteralPath $distDir).Path
@@ -24,11 +26,18 @@ if (Test-Path $distWorkDir) {
         Remove-Item -LiteralPath $resolvedWork -Recurse -Force
     }
 }
+
 $sources = Get-ChildItem -Path $srcDir -Filter *.cs | Sort-Object Name | ForEach-Object { $_.FullName }
 
+if (!(Test-Path $manifest)) {
+    throw "app.manifest not found: $manifest"
+}
+
 & $csc /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 `
+    "/win32manifest:$manifest" `
     /reference:System.Windows.Forms.dll /reference:System.Drawing.dll `
     /out:$outExe $sources
+
 if ($LASTEXITCODE -ne 0) {
     throw "C# build failed with exit code $LASTEXITCODE."
 }

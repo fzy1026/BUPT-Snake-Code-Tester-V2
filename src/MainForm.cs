@@ -57,7 +57,7 @@ namespace SnakeOJTester
         private ListView _caseList;
         private MapView _mapView;
         private Label _gccLabel;
-        private Label _statusLabel;
+        private ToolStripStatusLabel _statusLabel;
         private Label _stepLabel;
         private Button _prevButton;
         private Button _nextButton;
@@ -109,9 +109,10 @@ namespace SnakeOJTester
             UpdateModeUi();
             UpdateScoreSummary();
             LoadCases();
+            ShowInitialPreview();
             _codeBox.Text = "";
             RefreshGccInfo();
-            UpdateBusyState(false, "就绪");
+            UpdateBusyState(false, "就绪：已加载当前用例初始地图，可直接粘贴 C 代码后运行。");
         }
 
         private void BuildUi()
@@ -120,15 +121,16 @@ namespace SnakeOJTester
             root.Dock = DockStyle.Fill;
             root.RowCount = 3;
             root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             Controls.Add(root);
 
             FlowLayoutPanel toolbar = new FlowLayoutPanel();
             toolbar.Dock = DockStyle.Fill;
             toolbar.FlowDirection = FlowDirection.LeftToRight;
-            toolbar.WrapContents = false;
+            toolbar.WrapContents = true;
+            toolbar.AutoScroll = true;
             toolbar.Padding = new Padding(8, 8, 8, 4);
             root.Controls.Add(toolbar, 0, 0);
 
@@ -136,17 +138,21 @@ namespace SnakeOJTester
             _caseCombo = new ComboBox();
             _caseCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             _caseCombo.Width = 220;
-            _caseCombo.SelectedIndexChanged += delegate { ShowSelectedCaseInfo(); };
+            _caseCombo.SelectedIndexChanged += delegate
+            {
+                ShowSelectedCaseInfo();
+                ShowInitialPreview();
+            };
             toolbar.Controls.Add(_caseCombo);
 
             TableLayoutPanel modePanel = new TableLayoutPanel();
-            modePanel.Width = 268;
-            modePanel.Height = 46;
+            modePanel.Width = 360;
+            modePanel.Height = 70;
             modePanel.Margin = new Padding(8, 0, 8, 0);
             modePanel.RowCount = 2;
             modePanel.ColumnCount = 2;
-            modePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
             modePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+            modePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             modePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             modePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
@@ -154,7 +160,7 @@ namespace SnakeOJTester
             _modeHintLabel.Text = "当前模式：Debug 调试";
             _modeHintLabel.Dock = DockStyle.Fill;
             _modeHintLabel.TextAlign = ContentAlignment.MiddleLeft;
-            _modeHintLabel.Font = new Font("Microsoft YaHei UI", 8.5f, FontStyle.Bold);
+            _modeHintLabel.Font = new Font("Microsoft YaHei UI", 8f, FontStyle.Bold);
             modePanel.Controls.Add(_modeHintLabel, 0, 0);
             modePanel.SetColumnSpan(_modeHintLabel, 2);
 
@@ -256,7 +262,7 @@ namespace SnakeOJTester
             side.RowCount = 3;
             side.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
             side.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            side.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            side.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
             _mapSplit.Panel2.Controls.Add(side);
 
             _stepLabel = new Label();
@@ -275,25 +281,51 @@ namespace SnakeOJTester
             _variableList.Columns.Add("值", 220);
             side.Controls.Add(_variableList, 0, 1);
 
-            FlowLayoutPanel playback = new FlowLayoutPanel();
+            TableLayoutPanel playback = new TableLayoutPanel();
             playback.Dock = DockStyle.Fill;
-            playback.Padding = new Padding(8, 6, 8, 4);
-            playback.WrapContents = false;
+            playback.Padding = new Padding(8, 4, 8, 4);
+            playback.ColumnCount = 5;
+            playback.RowCount = 1;
+            playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            playback.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            playback.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            playback.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            playback.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            playback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
             _prevButton = MakeButton("上一步", PrevButton_Click);
             _nextButton = MakeButton("下一步", NextButton_Click);
             _playButton = MakeButton("播放", PlayButton_Click);
+
+            _prevButton.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            _nextButton.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            _playButton.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+
+            Label speedLabel = new Label();
+            speedLabel.Text = "速度";
+            speedLabel.AutoSize = false;
+            speedLabel.Width = 46;
+            speedLabel.Height = 30;
+            speedLabel.TextAlign = ContentAlignment.MiddleLeft;
+            speedLabel.Margin = new Padding(10, 0, 0, 0);
+
             _speedTrack = new TrackBar();
             _speedTrack.Minimum = 1;
             _speedTrack.Maximum = 10;
             _speedTrack.Value = 5;
-            _speedTrack.Width = 120;
+            _speedTrack.MinimumSize = new Size(120, 30);
+            _speedTrack.Height = 30;
+            _speedTrack.Dock = DockStyle.Fill;
+            _speedTrack.Margin = new Padding(4, 0, 0, 0);
             _speedTrack.TickStyle = TickStyle.None;
             _speedTrack.ValueChanged += delegate { UpdateTimerInterval(); };
-            playback.Controls.Add(_prevButton);
-            playback.Controls.Add(_nextButton);
-            playback.Controls.Add(_playButton);
-            playback.Controls.Add(new Label { Text = "速度", AutoSize = true, Padding = new Padding(8, 8, 0, 0) });
-            playback.Controls.Add(_speedTrack);
+
+            playback.Controls.Add(_prevButton, 0, 0);
+            playback.Controls.Add(_nextButton, 1, 0);
+            playback.Controls.Add(_playButton, 2, 0);
+            playback.Controls.Add(speedLabel, 3, 0);
+            playback.Controls.Add(_speedTrack, 4, 0);
+
             side.Controls.Add(playback, 0, 2);
 
             TabControl bottomTabs = new TabControl();
@@ -305,7 +337,7 @@ namespace SnakeOJTester
             resultLayout.Dock = DockStyle.Fill;
             resultLayout.RowCount = 2;
             resultLayout.ColumnCount = 1;
-            resultLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            resultLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
             resultLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             resultPage.Controls.Add(resultLayout);
 
@@ -327,11 +359,11 @@ namespace SnakeOJTester
             _resultGrid.Columns.Add("Score", "得分");
             _resultGrid.Columns.Add("Steps", "步数");
             _resultGrid.Columns.Add("Message", "中文提示");
-            _resultGrid.Columns.Add("Elapsed", "用时(ms)");
+            _resultGrid.Columns.Add("Elapsed", "学生用时(ms)");
             _resultGrid.Columns[0].Width = 46;
             _resultGrid.Columns[1].Width = 160;
             _resultGrid.Columns[8].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            _resultGrid.Columns[9].Width = 88;
+            _resultGrid.Columns[9].Width = 220;
             _resultGrid.SelectionChanged += ResultGrid_SelectionChanged;
             resultLayout.Controls.Add(_resultGrid, 0, 1);
             bottomTabs.TabPages.Add(resultPage);
@@ -389,11 +421,17 @@ namespace SnakeOJTester
             bottomTabs.TabPages.Add(helpPage);
 
             StatusStrip status = new StatusStrip();
-            _statusLabel = new Label();
-            ToolStripControlHost host = new ToolStripControlHost(_statusLabel);
-            host.AutoSize = false;
-            host.Width = 1100;
-            status.Items.Add(host);
+            status.AutoSize = false;
+            status.Height = 34;
+            status.SizingGrip = false;
+
+            _statusLabel = new ToolStripStatusLabel();
+            _statusLabel.Spring = true;
+            _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            _statusLabel.AutoToolTip = true;
+            _statusLabel.Font = new Font("Microsoft YaHei UI", 9f);
+
+            status.Items.Add(_statusLabel);
             root.Controls.Add(status, 0, 2);
 
             _playTimer = new System.Windows.Forms.Timer();
@@ -456,14 +494,27 @@ namespace SnakeOJTester
 
         private Control BuildAdvancedPanel()
         {
+            Panel outer = new Panel();
+            outer.Dock = DockStyle.Fill;
+            outer.AutoScroll = true;
+            outer.Padding = new Padding(0);
+
             TableLayoutPanel panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Top;
-            panel.Padding = new Padding(16);
+            panel.AutoSize = true;
+            panel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            panel.Padding = new Padding(16, 14, 16, 14);
             panel.RowCount = 6;
             panel.ColumnCount = 3;
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 120));
+            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             _timeLimitBox = new NumericUpDown();
             _timeLimitBox.Minimum = 50;
@@ -503,15 +554,18 @@ namespace SnakeOJTester
 
             AddAdvancedRow(panel, 0, "时间限制(ms)", _timeLimitBox, "默认 400ms。按单个用例总运行时间限制，超时直接判 TLE。");
             AddAdvancedRow(panel, 1, "内存限制(MB)", _memoryLimitBox, "默认 64MB。运行时监控学生程序私有内存，超过即停止。");
-            AddAdvancedRow(panel, 2, "代码长度(KB)", _codeLengthLimitBox, "默认 16KB。编译前按 UTF-8 字节数检查。");
+            AddAdvancedRow(panel, 2, "代码长度(KB)", _codeLengthLimitBox, "默认 16KB。编译前按 UTF-8 字节数检查，超过会在编译前拦截。");
             AddAdvancedRow(panel, 3, "栈限制(KB)", _stackLimitBox, "默认 8192KB。编译时通过链接器设置 Windows 程序栈大小。");
 
             TextBox note = MakeReadOnlyTextBox();
-            note.Text = "限制说明：本工具不再使用步数上限。每个用例按时间 400ms、内存 64MB、代码长度 16KB、栈 8192KB 进行默认限制；食物生成仍采用固定 seed 的 C 风格伪随机规则，尽量贴近学校 OJ 的交互形态。";
-            note.Height = 90;
+            note.Text = "限制说明：本工具不再使用步数上限。每个用例默认按时间 400ms、内存 64MB、代码长度 16KB、栈 8192KB 限制；食物生成采用固定 seed 的 C 风格伪随机规则，尽量贴近学校 OJ 的交互形态。";
+            note.Height = 100;
+            note.MinimumSize = new Size(0, 96);
             panel.Controls.Add(note, 0, 4);
             panel.SetColumnSpan(note, 3);
-            return panel;
+
+            outer.Controls.Add(panel);
+            return outer;
         }
 
         private void AddAdvancedRow(TableLayoutPanel panel, int row, string label, Control editor, string help)
@@ -520,13 +574,19 @@ namespace SnakeOJTester
             l.Text = label;
             l.TextAlign = ContentAlignment.MiddleLeft;
             l.Dock = DockStyle.Fill;
+            l.Font = new Font("Microsoft YaHei UI", 9f);
             panel.Controls.Add(l, 0, row);
+
             editor.Dock = DockStyle.Fill;
+            editor.Margin = new Padding(0, 3, 10, 3);
             panel.Controls.Add(editor, 1, row);
+
             Label h = new Label();
             h.Text = help;
             h.TextAlign = ContentAlignment.MiddleLeft;
             h.Dock = DockStyle.Fill;
+            h.AutoEllipsis = true;
+            h.Font = new Font("Microsoft YaHei UI", 9f);
             panel.Controls.Add(h, 2, row);
         }
 
@@ -546,9 +606,12 @@ namespace SnakeOJTester
             Button b = new Button();
             b.Text = text;
             b.Dock = DockStyle.Fill;
-            b.Margin = new Padding(0);
+            b.MinimumSize = new Size(0, 36);
+            b.Margin = new Padding(0, 2, 0, 0);
             b.FlatStyle = FlatStyle.Flat;
-            b.Font = new Font("Microsoft YaHei UI", 8.5f, FontStyle.Bold);
+            b.TextAlign = ContentAlignment.MiddleCenter;
+            b.AutoEllipsis = false;
+            b.Font = new Font("Microsoft YaHei UI", 8.2f, FontStyle.Bold);
             b.Tag = scoreMode;
             b.Click += ModeSegment_Click;
             return b;
@@ -577,6 +640,8 @@ namespace SnakeOJTester
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             grid.MultiSelect = false;
             grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells;
+            grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            grid.RowTemplate.Height = 26;
             grid.BackgroundColor = Color.White;
             return grid;
         }
@@ -626,6 +691,107 @@ namespace SnakeOJTester
             }
             sb.AppendLine(tc.N.ToString());
             _caseInfoBox.Text = sb.ToString();
+        }
+
+
+        private void ShowInitialPreview()
+        {
+            if (_caseCombo == null || _mapView == null || _variableList == null || _stepGrid == null)
+            {
+                return;
+            }
+
+            int index = _caseCombo.SelectedIndex;
+            if (index < 0 || index >= _cases.Count)
+            {
+                return;
+            }
+
+            TestCase tc = _cases[index];
+            GridSnapshot snapshot = CreateInitialSnapshot(tc);
+
+            _currentResult = null;
+            _currentStepIndex = 0;
+            _mapView.Snapshot = snapshot;
+
+            if (_stepLabel != null)
+            {
+                _stepLabel.Text = "初始地图：" + tc.Name;
+            }
+
+            _stepGrid.Rows.Clear();
+            _stepGrid.Rows.Add(
+                "0",
+                "0",
+                Pos(snapshot.Head),
+                Pos(snapshot.Food),
+                "-",
+                "-",
+                snapshot.SnakeLength.ToString(),
+                "当前用例初始状态，尚未运行学生程序。"
+            );
+
+            _variableList.Items.Clear();
+            AddVariable("用例", tc.Name);
+            AddVariable("N", tc.N.ToString());
+            AddVariable("蛇长", snapshot.SnakeLength.ToString());
+            AddVariable("蛇头", Pos(snapshot.Head));
+            AddVariable("食物", Pos(snapshot.Food));
+            AddVariable("当前方向", DirectionHelper.ChineseName(snapshot.CurrentDirection));
+            AddVariable("程序指令", "-");
+            AddVariable("OJ 返回", "-");
+            AddVariable("吃到食物", "否");
+            AddVariable("本步增长", "否");
+            AddVariable("是否结束", "否");
+            AddVariable("说明", "当前用例初始状态，尚未运行学生程序。");
+        }
+
+        private GridSnapshot CreateInitialSnapshot(TestCase tc)
+        {
+            GridSnapshot snapshot = new GridSnapshot();
+            snapshot.CaseName = tc.Name;
+            snapshot.Step = 0;
+            snapshot.Score = 0;
+            snapshot.N = tc.N;
+            snapshot.SnakeLength = 0;
+            snapshot.Head = new Point(-1, -1);
+            snapshot.Food = new Point(-1, -1);
+            snapshot.CurrentDirection = Direction.Up;
+            snapshot.StudentMove = "";
+            snapshot.OjResponse = "";
+            snapshot.AteFood = false;
+            snapshot.Grew = false;
+            snapshot.Ended = false;
+            snapshot.EndReason = "";
+            snapshot.Note = "当前用例初始状态。";
+
+            char[,] map = new char[20, 20];
+
+            for (int r = 0; r < 20; r++)
+            {
+                for (int c = 0; c < 20; c++)
+                {
+                    char ch = tc.InitialMap[r][c];
+                    map[r, c] = ch;
+
+                    if (ch == 'H')
+                    {
+                        snapshot.Head = new Point(c, r);
+                        snapshot.SnakeLength++;
+                    }
+                    else if (ch == 'B')
+                    {
+                        snapshot.SnakeLength++;
+                    }
+                    else if (ch == 'F')
+                    {
+                        snapshot.Food = new Point(c, r);
+                    }
+                }
+            }
+
+            snapshot.Map = map;
+            return snapshot;
         }
 
         private void RefreshGccInfo()
@@ -866,7 +1032,7 @@ namespace SnakeOJTester
             if (scoringRun)
             {
                 _scoreSummaryLabel.Text = "正在重新跑分：本次会重新编译当前代码，并运行 " + caseCount + " 个跑分用例。测试组：" + scoringGroupLabel + "。代码指纹：" + _lastRunCodeFingerprint + "。";
-                _scoreSummaryLabel.Text += " 跑分用例会按顺序逐个执行；结果表和导出日志会显示每个样例的实际用时；每个用例保留最多 " + ScoringSnapshotLimit + " 个逐步地图快照，超出时保留开头和末尾关键段。";
+                _scoreSummaryLabel.Text += " 跑分用例会按顺序逐个执行；结果表和导出日志会显示每个样例的学生程序用时；每个用例保留最多 " + ScoringSnapshotLimit + " 个逐步地图快照，超出时保留开头和末尾关键段。";
                 _scoreSummaryLabel.BackColor = Color.FromArgb(235, 247, 255);
             }
             else if (batch)
@@ -954,7 +1120,7 @@ namespace SnakeOJTester
                 BeginInvoke(new MethodInvoker(delegate
                 {
                     string prefix = scoringRun ? "跑分中" : "评测中";
-                    string text = prefix + "：" + done + "/" + total + "，刚完成 " + result.CaseName + "，状态 " + result.StatusText + "，得分 " + result.Score + "，用时 " + result.ElapsedMs + "ms。";
+                    string text = prefix + "：" + done + "/" + total + "，刚完成 " + result.CaseName + "，状态 " + result.StatusText + "，得分 " + result.Score + "，学生用时 " + DisplayElapsed(result) + "。";
                     if (_statusLabel != null)
                     {
                         _statusLabel.Text = text;
@@ -1026,6 +1192,31 @@ namespace SnakeOJTester
             }
         }
 
+        private string DisplayElapsed(JudgeResult result)
+        {
+            if (result == null)
+            {
+                return "";
+            }
+
+            if (result.HideElapsedMs || result.Status == JudgeStatus.TimeLimitExceeded)
+            {
+                return "超时未显示；可在高级设置上调时间后重测";
+            }
+
+            if (result.ProgramElapsedMs >= 0)
+            {
+                return result.ProgramElapsedMs.ToString();
+            }
+
+            if (result.ElapsedMs >= 0)
+            {
+                return result.ElapsedMs.ToString();
+            }
+
+            return "";
+        }
+
         private void FillResultGrid()
         {
             _resultGrid.SuspendLayout();
@@ -1037,7 +1228,7 @@ namespace SnakeOJTester
                     JudgeResult r = _results[i];
                     double weight = WeightForN(r.N);
                     double weighted = r.Score * weight;
-                    int row = _resultGrid.Rows.Add((i + 1).ToString(), r.CaseName, r.N.ToString(), weight.ToString("0.###"), weighted.ToString("0.##"), r.StatusText, r.Score.ToString(), r.Steps.ToString(), r.Message, r.ElapsedMs.ToString());
+                    int row = _resultGrid.Rows.Add((i + 1).ToString(), r.CaseName, r.N.ToString(), weight.ToString("0.###"), weighted.ToString("0.##"), r.StatusText, r.Score.ToString(), r.Steps.ToString(), r.Message, DisplayElapsed(r));
                     DataGridViewRow gridRow = _resultGrid.Rows[row];
                     if (r.Status == JudgeStatus.Accepted)
                     {
@@ -1083,7 +1274,7 @@ namespace SnakeOJTester
             }
             else if (_results.Count == 0 && _scoreMode)
             {
-                _scoreSummaryLabel.Text = "跑分模式：点击“开始跑分(10组)”，按当前测试组 " + CurrentScoringGroupLabel() + " 顺序运行 10 个 N 权重用例；总分 = Σ(原始分 / (log2(N) + 1))，然后按基础分规则折算，忽略排名奖励；结果表会显示每个样例的实际用时。";
+                _scoreSummaryLabel.Text = "跑分模式：点击“开始跑分(10组)”，按当前测试组 " + CurrentScoringGroupLabel() + " 顺序运行 10 个 N 权重用例；总分 = Σ(原始分 / (log2(N) + 1))，然后按基础分规则折算，忽略排名奖励；结果表会显示每个样例的学生程序用时。";
                 _scoreSummaryLabel.BackColor = Color.FromArgb(235, 247, 255);
             }
             else if (_results.Count > 0)
@@ -1480,7 +1671,7 @@ namespace SnakeOJTester
             for (int i = 0; i < _results.Count; i++)
             {
                 JudgeResult r = _results[i];
-                sb.AppendLine((i + 1) + ". " + r.CaseName + "  " + r.StatusText + "  分数=" + r.Score + "  步数=" + r.Steps + "  用时(ms)=" + r.ElapsedMs);
+                sb.AppendLine((i + 1) + ". " + r.CaseName + "  " + r.StatusText + "  分数=" + r.Score + "  步数=" + r.Steps + "  学生用时(ms)=" + DisplayElapsed(r));
                 sb.AppendLine("   " + r.Message);
             }
             sb.AppendLine();

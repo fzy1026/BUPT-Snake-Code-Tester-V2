@@ -235,6 +235,14 @@ namespace SnakeOJTester
                         {
                             SetStatus(result, session.LimitStatus, session.LimitMessage);
                         }
+                        else if (session.HasExited && session.ExitCode != 0)
+                        {
+                            SetStatus(result, JudgeStatus.RuntimeError, "程序输出方向 `" + moveLine + "` 后提前异常退出，退出码：" + session.ExitCode + "。");
+                        }
+                        else if (session.HasExited && session.ExitCode == 0)
+                        {
+                            SetStatus(result, JudgeStatus.PresentationError, "程序输出方向 `" + moveLine + "` 后正常退出，但没有输出第二行分数。");
+                        }
                         else
                         {
                             SetStatus(result, JudgeStatus.TimeLimitExceeded, "读取到方向 `" + moveLine + "`，但等待分数输出超时。请在输出方向和分数后都刷新 stdout。");
@@ -314,7 +322,17 @@ namespace SnakeOJTester
             finally
             {
                 elapsed.Stop();
-                result.ElapsedMs = elapsed.ElapsedMilliseconds;
+                result.ProgramElapsedMs = session.ProgramElapsedMs;
+                if (result.Status == JudgeStatus.TimeLimitExceeded)
+                {
+                    result.HideElapsedMs = true;
+                    result.ElapsedMs = -1;
+                }
+                else
+                {
+                    result.HideElapsedMs = false;
+                    result.ElapsedMs = result.ProgramElapsedMs;
+                }
                 result.InteractionLog = recorder.GetLog();
                 result.Snapshots = recorder.GetSnapshots();
                 result.ProgramError = session.GetStderr();
@@ -354,10 +372,11 @@ namespace SnakeOJTester
             }
             recorder.AppendLine("");
 
+            JudgeStatus finalStatus;
             string mapError;
-            if (!CompareFinalOutput(finalLines, state, out mapError))
+            if (!CompareFinalOutput(finalLines, state, out finalStatus, out mapError))
             {
-                SetStatus(result, JudgeStatus.WrongAnswer, mapError);
+                SetStatus(result, finalStatus, mapError);
                 result.Score = state.Score;
                 result.Steps = state.MoveCount;
                 return;
@@ -385,11 +404,13 @@ namespace SnakeOJTester
             result.Steps = state.MoveCount;
         }
 
-        private static bool CompareFinalOutput(List<string> finalLines, SnakeState state, out string error)
+        private static bool CompareFinalOutput(List<string> finalLines, SnakeState state, out JudgeStatus status, out string error)
         {
+            status = JudgeStatus.WrongAnswer;
             error = "";
             if (finalLines.Count != 21)
             {
+                status = JudgeStatus.PresentationError;
                 error = "最终输出行数不足：应输出 20 行地图和 1 行分数。";
                 return false;
             }
@@ -400,12 +421,14 @@ namespace SnakeOJTester
                 string actual = finalLines[r];
                 if (actual == null || actual.Length != 20)
                 {
+                    status = JudgeStatus.PresentationError;
                     error = "最终地图第 " + r + " 行长度错误：应为 20，实际为 " + (actual == null ? 0 : actual.Length) + "。";
                     return false;
                 }
                 if (actual != expected[r])
                 {
                     int diff = FirstDiff(expected[r], actual);
+                    status = JudgeStatus.WrongAnswer;
                     error = "最终地图不一致：第 " + r + " 行第 " + diff + " 列应为 `" + expected[r][diff] + "`，实际为 `" + actual[diff] + "`。";
                     return false;
                 }
@@ -414,12 +437,14 @@ namespace SnakeOJTester
             int finalScore;
             if (!int.TryParse(finalLines[20].Trim(), out finalScore))
             {
+                status = JudgeStatus.PresentationError;
                 error = "最终分数格式错误：第 21 行应为整数，实际为 `" + finalLines[20] + "`。";
                 return false;
             }
 
             if (finalScore != state.Score)
             {
+                status = JudgeStatus.WrongAnswer;
                 error = "最终分数错误：真实分数是 " + state.Score + "，程序输出了 " + finalScore + "。";
                 return false;
             }
@@ -562,11 +587,7 @@ namespace SnakeOJTester
 
         public void AddSnapshot(GridSnapshot snapshot)
         {
-            if (!_captureDetails)
-            {
-                return;
-            }
-            if (snapshot == null)
+            if (!_captureDetails || snapshot == null)
             {
                 return;
             }
@@ -910,6 +931,10 @@ namespace SnakeOJTester
             {
                 return false;
             }
+            if (_food.X == col && _food.Y == row)
+            {
+                return false;
+            }
             for (int i = 0; i < _snake.Count; i++)
             {
                 if (_snake[i].X == col && _snake[i].Y == row)
@@ -922,96 +947,45 @@ namespace SnakeOJTester
 
         private static List<Point> OrderSnake(Point head, List<Point> body)
         {
-            List<Point> best = new List<Point>();
-            best.Add(head);
-            for (int i = 0; i < body.Count; i++)
-            {
-                if (!Adjacent(head, body[i]))
-                {
-                    continue;
-                }
-                List<Point> path = FollowBodyPath(head, body[i], body);
-                if (path.Count > best.Count)
-                {
-                    best = path;
-                }
-            }
+            List<Point> ordered = new List<Point>();
+            ordered.Add(head);
+            List<Point> remain = new List<Point>(body);
+            Point current = head;
 
-            if (best.Count < body.Count + 1)
+            while (remain.Count > 0)
             {
-                for (int i = 0; i < body.Count; i++)
+                int found = -1;
+                for (int i = 0; i < remain.Count; i++)
                 {
-                    bool exists = false;
-                    for (int j = 0; j < best.Count; j++)
+                    if (Adjacent(current, remain[i]))
                     {
-                        if (Same(best[j], body[i]))
-                        {
-                            exists = true;
-                            break;
-                        }
-                    }
-                    if (!exists)
-                    {
-                        best.Add(body[i]);
-                    }
-                }
-            }
-
-            return best;
-        }
-
-        private static List<Point> FollowBodyPath(Point head, Point firstBody, List<Point> body)
-        {
-            List<Point> path = new List<Point>();
-            path.Add(head);
-            path.Add(firstBody);
-            Point previous = head;
-            Point current = firstBody;
-            while (true)
-            {
-                Point next = new Point(-1, -1);
-                for (int i = 0; i < body.Count; i++)
-                {
-                    Point candidate = body[i];
-                    if (Same(candidate, previous) || Contains(path, candidate))
-                    {
-                        continue;
-                    }
-                    if (Adjacent(current, candidate))
-                    {
-                        next = candidate;
+                        found = i;
                         break;
                     }
                 }
 
-                if (next.X < 0)
+                if (found < 0)
                 {
-                    break;
+                    throw new InvalidOperationException("初始蛇身不连续，无法确定蛇身顺序。");
                 }
-                previous = current;
+
+                Point next = remain[found];
+                ordered.Add(next);
+                remain.RemoveAt(found);
                 current = next;
-                path.Add(current);
             }
-            return path;
-        }
 
-        private static bool Contains(List<Point> points, Point p)
-        {
-            for (int i = 0; i < points.Count; i++)
-            {
-                if (Same(points[i], p)) return true;
-            }
-            return false;
-        }
-
-        private static bool Adjacent(Point a, Point b)
-        {
-            return Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y) == 1;
+            return ordered;
         }
 
         private static bool Same(Point a, Point b)
         {
             return a.X == b.X && a.Y == b.Y;
+        }
+
+        private static bool Adjacent(Point a, Point b)
+        {
+            return Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y) == 1;
         }
 
         private static string PosText(Point p)
@@ -1023,29 +997,29 @@ namespace SnakeOJTester
     internal sealed class StudentSession : IDisposable
     {
         private Process _process;
-        private BlockingCollection<string> _stdout;
+        private ConcurrentQueue<string> _stdoutLines;
+        private AutoResetEvent _lineEvent;
         private StringBuilder _stderr;
         private object _stderrLock;
-        private Stopwatch _watch;
-        private int _timeLimitMs;
-        private long _memoryLimitBytes;
-        private JudgeStatus _limitStatus;
-        private string _limitMessage;
-        private long _lastLimitCheckMs;
-        private int _limitCheckIntervalMs;
+        private Thread _monitorThread;
+        private RunOptions _options;
+        private volatile bool _disposed;
+        private Stopwatch _programTimer;
+        private long _programElapsedMs;
+        private readonly object _programTimerLock = new object();
+
+        public JudgeStatus LimitStatus;
+        public string LimitMessage;
 
         public StudentSession()
         {
-            _stdout = new BlockingCollection<string>();
+            _stdoutLines = new ConcurrentQueue<string>();
+            _lineEvent = new AutoResetEvent(false);
             _stderr = new StringBuilder();
             _stderrLock = new object();
-            _watch = new Stopwatch();
-            _timeLimitMs = 400;
-            _memoryLimitBytes = 64L * 1024L * 1024L;
-            _limitStatus = JudgeStatus.NotRun;
-            _limitMessage = "";
-            _lastLimitCheckMs = 0;
-            _limitCheckIntervalMs = 20;
+            LimitStatus = JudgeStatus.NotRun;
+            LimitMessage = "";
+            _programElapsedMs = 0;
         }
 
         public bool HasExited
@@ -1077,28 +1051,31 @@ namespace SnakeOJTester
                 catch
                 {
                 }
-                return -1;
+                return 0;
             }
         }
 
-        public JudgeStatus LimitStatus
+        public long ProgramElapsedMs
         {
-            get { return _limitStatus; }
+            get
+            {
+                lock (_programTimerLock)
+                {
+                    if (_programTimer != null && _programTimer.IsRunning)
+                    {
+                        return _programTimer.ElapsedMilliseconds;
+                    }
+                    return _programElapsedMs;
+                }
+            }
         }
 
-        public string LimitMessage
+        public void Start(string exePath, string workingDirectory, RunOptions options)
         {
-            get { return _limitMessage; }
-        }
-
-        public void Start(string exePath, string workDir, RunOptions options)
-        {
-            _timeLimitMs = options.TimeLimitMs;
-            _memoryLimitBytes = Math.Max(0, options.MemoryLimitKb) * 1024L;
-            _limitCheckIntervalMs = Math.Max(5, options.LimitCheckIntervalMs);
+            _options = options;
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = exePath;
-            psi.WorkingDirectory = workDir;
+            psi.WorkingDirectory = string.IsNullOrEmpty(workingDirectory) ? Path.GetDirectoryName(exePath) : workingDirectory;
             psi.UseShellExecute = false;
             psi.RedirectStandardInput = true;
             psi.RedirectStandardOutput = true;
@@ -1111,7 +1088,8 @@ namespace SnakeOJTester
             {
                 if (e.Data != null)
                 {
-                    _stdout.Add(e.Data);
+                    _stdoutLines.Enqueue(e.Data);
+                    _lineEvent.Set();
                 }
             };
             _process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
@@ -1124,23 +1102,19 @@ namespace SnakeOJTester
                     }
                 }
             };
+
             _process.Start();
-            try
-            {
-                _process.PriorityClass = ProcessPriorityClass.BelowNormal;
-            }
-            catch
-            {
-            }
-            _watch.Restart();
-            _lastLimitCheckMs = 0;
+            StartProgramTimer();
             _process.BeginOutputReadLine();
             _process.BeginErrorReadLine();
+
+            _monitorThread = new Thread(MonitorLoop);
+            _monitorThread.IsBackground = true;
+            _monitorThread.Start();
         }
 
         public void Write(string text)
         {
-            CheckLimits();
             if (_process == null || _process.HasExited)
             {
                 return;
@@ -1151,7 +1125,6 @@ namespace SnakeOJTester
 
         public void WriteLine(string text)
         {
-            CheckLimits();
             if (_process == null || _process.HasExited)
             {
                 return;
@@ -1163,187 +1136,37 @@ namespace SnakeOJTester
         public bool TryReadLine(int timeoutMs, out string line)
         {
             line = null;
-            int slice = 10;
-            int waited = 0;
-            while (waited < timeoutMs)
+            Stopwatch wait = Stopwatch.StartNew();
+            int effectiveTimeout = Math.Max(1, timeoutMs);
+            while (wait.ElapsedMilliseconds <= effectiveTimeout)
             {
-                if (!CheckLimits())
-                {
-                    return false;
-                }
-                if (_stdout.TryTake(out line))
-                {
-                    if (!CheckLimits())
-                    {
-                        line = null;
-                        return false;
-                    }
-                    return true;
-                }
-
-                int waitMs = NextWaitMs(timeoutMs, waited, slice);
-                if (waitMs <= 0)
-                {
-                    CheckLimits();
-                    return false;
-                }
-
-                if (_stdout.TryTake(out line, waitMs))
-                {
-                    if (!CheckLimits())
-                    {
-                        line = null;
-                        return false;
-                    }
-                    return true;
-                }
-                waited += waitMs;
-                if (HasExited && _stdout.Count == 0)
-                {
-                    return false;
-                }
-            }
-            return false;
-        }
-
-        public bool WaitForExit(int timeoutMs)
-        {
-            try
-            {
-                if (_process == null)
+                if (_stdoutLines.TryDequeue(out line))
                 {
                     return true;
                 }
-                int slice = 10;
-                int waited = 0;
-                while (waited < timeoutMs)
+
+                if (LimitStatus != JudgeStatus.NotRun)
                 {
-                    if (!CheckLimits())
-                    {
-                        return false;
-                    }
-                    if (_process.WaitForExit(0))
+                    return false;
+                }
+
+                if (HasExited)
+                {
+                    if (_stdoutLines.TryDequeue(out line))
                     {
                         return true;
                     }
-
-                    int waitMs = NextWaitMs(timeoutMs, waited, slice);
-                    if (waitMs <= 0)
-                    {
-                        CheckLimits();
-                        return _process.WaitForExit(0);
-                    }
-
-                    if (_process.WaitForExit(waitMs))
-                    {
-                        return true;
-                    }
-                    waited += waitMs;
-                }
-                return _process.WaitForExit(0);
-            }
-            catch
-            {
-                return true;
-            }
-        }
-
-        private int NextWaitMs(int timeoutMs, int waitedMs, int sliceMs)
-        {
-            int remainingForCall = timeoutMs - waitedMs;
-            if (remainingForCall <= 0)
-            {
-                return 0;
-            }
-
-            int remainingForCase = RemainingTimeMs();
-            if (remainingForCase <= 0)
-            {
-                return 0;
-            }
-
-            return Math.Min(Math.Min(sliceMs, remainingForCall), remainingForCase);
-        }
-
-        private int RemainingTimeMs()
-        {
-            if (_timeLimitMs <= 0)
-            {
-                return int.MaxValue;
-            }
-
-            long remaining = (long)_timeLimitMs - _watch.ElapsedMilliseconds;
-            if (remaining <= 0)
-            {
-                return 0;
-            }
-            if (remaining > int.MaxValue)
-            {
-                return int.MaxValue;
-            }
-            return (int)remaining;
-        }
-
-        private bool CheckLimits()
-        {
-            if (_limitStatus != JudgeStatus.NotRun)
-            {
-                return false;
-            }
-
-            try
-            {
-                if (_process == null || _process.HasExited)
-                {
-                    return true;
-                }
-
-                long now = _watch.ElapsedMilliseconds;
-                if (_timeLimitMs > 0 && now >= _timeLimitMs)
-                {
-                    _limitStatus = JudgeStatus.TimeLimitExceeded;
-                    _limitMessage = "时间超限：本地限制为 " + _timeLimitMs + "ms（按单个用例总耗时监控）。程序可能没有及时输出、没有刷新 stdout，或策略运行过久。";
-                    KillForLimit();
                     return false;
                 }
 
-                if (now - _lastLimitCheckMs < _limitCheckIntervalMs)
+                int left = effectiveTimeout - (int)wait.ElapsedMilliseconds;
+                if (left <= 0)
                 {
-                    return true;
+                    break;
                 }
-                _lastLimitCheckMs = now;
-
-                if (_memoryLimitBytes > 0)
-                {
-                    _process.Refresh();
-                    long privateBytes = _process.PrivateMemorySize64;
-                    if (privateBytes > _memoryLimitBytes)
-                    {
-                        _limitStatus = JudgeStatus.MemoryLimitExceeded;
-                        _limitMessage = "内存超限：当前约 " + (privateBytes / 1024 / 1024) + "MB，限制 " + (_memoryLimitBytes / 1024 / 1024) + "MB。";
-                        KillForLimit();
-                        return false;
-                    }
-                }
+                _lineEvent.WaitOne(Math.Min(10, left));
             }
-            catch
-            {
-            }
-            return true;
-        }
-
-        private void KillForLimit()
-        {
-            try
-            {
-                if (_process != null && !_process.HasExited)
-                {
-                    _process.Kill();
-                }
-            }
-            catch
-            {
-            }
+            return _stdoutLines.TryDequeue(out line);
         }
 
         public string GetStderr()
@@ -1354,13 +1177,142 @@ namespace SnakeOJTester
             }
         }
 
-        public void Dispose()
+        public bool WaitForExit(int timeoutMs)
+        {
+            if (_process == null)
+            {
+                return true;
+            }
+
+            bool exited;
+            try
+            {
+                exited = _process.WaitForExit(timeoutMs);
+            }
+            catch
+            {
+                exited = true;
+            }
+
+            if (exited)
+            {
+                StopProgramTimer();
+            }
+            return exited;
+        }
+
+        private void MonitorLoop()
+        {
+            while (!_disposed)
+            {
+                try
+                {
+                    if (_process == null)
+                    {
+                        return;
+                    }
+                    if (_process.HasExited)
+                    {
+                        StopProgramTimer();
+                        return;
+                    }
+
+                    long usedMs = ProgramElapsedMs;
+                    if (_options != null && _options.TimeLimitMs > 0 && usedMs > _options.TimeLimitMs)
+                    {
+                        LimitStatus = JudgeStatus.TimeLimitExceeded;
+                        LimitMessage = "时间超限：本地限制为 " + _options.TimeLimitMs + "ms（按学生程序单个用例运行时间监控）。如需查看实际耗时，可在“高级设置”中上调时间限制后重测。";
+                        TryKillProcess();
+                        StopProgramTimer();
+                        _lineEvent.Set();
+                        return;
+                    }
+
+                    if (_options != null && _options.MemoryLimitKb > 0)
+                    {
+                        long memoryBytes = 0;
+                        try
+                        {
+                            _process.Refresh();
+                            memoryBytes = _process.PrivateMemorySize64;
+                        }
+                        catch
+                        {
+                            memoryBytes = 0;
+                        }
+                        if (memoryBytes > (long)_options.MemoryLimitKb * 1024L)
+                        {
+                            LimitStatus = JudgeStatus.MemoryLimitExceeded;
+                            LimitMessage = "内存超限：本地限制为 " + (_options.MemoryLimitKb / 1024) + "MB，当前私有内存约 " + (memoryBytes / 1024 / 1024) + "MB。";
+                            TryKillProcess();
+                            StopProgramTimer();
+                            _lineEvent.Set();
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+
+                int interval = 20;
+                if (_options != null && _options.LimitCheckIntervalMs > 0)
+                {
+                    interval = _options.LimitCheckIntervalMs;
+                }
+                Thread.Sleep(Math.Max(5, interval));
+            }
+        }
+
+        private void StartProgramTimer()
+        {
+            lock (_programTimerLock)
+            {
+                _programElapsedMs = 0;
+                _programTimer = Stopwatch.StartNew();
+            }
+        }
+
+        private void StopProgramTimer()
+        {
+            lock (_programTimerLock)
+            {
+                if (_programTimer != null)
+                {
+                    if (_programTimer.IsRunning)
+                    {
+                        _programTimer.Stop();
+                    }
+                    _programElapsedMs = _programTimer.ElapsedMilliseconds;
+                }
+            }
+        }
+
+        private void TryKillProcess()
         {
             try
             {
                 if (_process != null && !_process.HasExited)
                 {
                     _process.Kill();
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void Dispose()
+        {
+            _disposed = true;
+            StopProgramTimer();
+            TryKillProcess();
+            try
+            {
+                if (_lineEvent != null)
+                {
+                    _lineEvent.Set();
+                    _lineEvent.Dispose();
                 }
             }
             catch
@@ -1376,13 +1328,7 @@ namespace SnakeOJTester
             catch
             {
             }
-            try
-            {
-                _stdout.Dispose();
-            }
-            catch
-            {
-            }
         }
     }
+
 }
