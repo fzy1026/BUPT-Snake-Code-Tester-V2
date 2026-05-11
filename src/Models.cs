@@ -108,6 +108,8 @@ namespace SnakeOJTester
         public int Score;
         public int Steps;
         public long ElapsedMs;
+        public long ProgramElapsedMs;
+        public bool HideElapsedMs;
         public string Message;
         public string InteractionLog;
         public string ProgramError;
@@ -121,6 +123,8 @@ namespace SnakeOJTester
             StatusText = "未运行";
             Message = "";
             ElapsedMs = 0;
+            ProgramElapsedMs = 0;
+            HideElapsedMs = false;
             InteractionLog = "";
             ProgramError = "";
             Snapshots = new List<GridSnapshot>();

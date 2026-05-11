@@ -31,22 +31,24 @@ namespace SnakeOJTester
         {
             base.OnPaint(e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             e.Graphics.Clear(Color.FromArgb(248, 250, 252));
 
             if (_snapshot == null)
             {
                 using (Brush brush = new SolidBrush(Color.FromArgb(80, 90, 105)))
+                using (Font emptyFont = new Font("Microsoft YaHei UI", 12f))
                 {
                     StringFormat sf = new StringFormat();
                     sf.Alignment = StringAlignment.Center;
                     sf.LineAlignment = StringAlignment.Center;
-                    e.Graphics.DrawString("暂无地图，请先运行一个测试用例", new Font("Microsoft YaHei UI", 12f), brush, ClientRectangle, sf);
+                    e.Graphics.DrawString("暂无地图，请先运行一个测试用例", emptyFont, brush, ClientRectangle, sf);
                 }
                 return;
             }
 
             int margin = 12;
-            int labelArea = 28;
+            int labelArea = 30;
             int size = Math.Min(ClientSize.Width - labelArea, ClientSize.Height - labelArea) - margin * 2;
             if (size < 100) size = 100;
             int cell = size / 20;
@@ -119,17 +121,20 @@ namespace SnakeOJTester
                 }
             }
 
-            float fontSize = Math.Max(7f, Math.Min(10f, cell * 0.34f));
-            using (Font axisFont = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold))
+            // 200% 缩放下，10~19 是两位数；字体必须比原来更小，否则只会显示成“1”。
+            float fontSize = Math.Max(6f, Math.Min(8.5f, cell * 0.26f));
+            using (Font axisFont = new Font("Microsoft YaHei UI", fontSize, FontStyle.Regular))
             using (Brush textBrush = new SolidBrush(Color.FromArgb(55, 70, 90)))
             {
-                StringFormat sf = new StringFormat();
+                StringFormat sf = new StringFormat(StringFormatFlags.NoWrap);
                 sf.Alignment = StringAlignment.Center;
                 sf.LineAlignment = StringAlignment.Center;
+                sf.Trimming = StringTrimming.None;
+
                 for (int i = 0; i < 20; i++)
                 {
-                    Rectangle colRect = new Rectangle(boardLeft + i * cell, labelTop, cell, labelArea);
-                    Rectangle rowRect = new Rectangle(labelLeft, boardTop + i * cell, labelArea, cell);
+                    RectangleF colRect = new RectangleF(boardLeft + i * cell, labelTop, cell, labelArea);
+                    RectangleF rowRect = new RectangleF(labelLeft, boardTop + i * cell, labelArea, cell);
                     g.DrawString(i.ToString(), axisFont, textBrush, colRect, sf);
                     g.DrawString(i.ToString(), axisFont, textBrush, rowRect, sf);
                 }
